@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { StatusCodes } = require('http-status-codes');
 
 const User = require('src/models/user');
 
@@ -8,10 +9,22 @@ const JWT_ACCESS_EXPIRATION = '15m';
 const JWT_REFRESH_EXPIRATION = '365d';
 const JWT_TOKEN_TYPE = Object.freeze({ REFRESH: 'REFRESH', ACCESS: 'ACCESS' });
 
+class AuthenticationError extends Error {
+  constructor(message) {
+    super(message);
+    this.status = StatusCodes.UNAUTHORIZED;
+  }
+}
+
 async function signUpLocal(req, res, next) {
   const user = new User(req.body.user);
-  await user.save();
-  req.user = user;
+  try {
+    await user.save();
+    req.user = user;
+  } catch (err) {
+    err.status = StatusCodes.BAD_REQUEST;
+    throw err;
+  }
   next();
 }
 
@@ -22,28 +35,34 @@ async function loginLocal(req, res, next) {
     req.user = user;
     return next();
   }
-  throw Error('Invalid username and/or password');
+  throw new AuthenticationError('Invalid username and/or password');
 }
 
 async function jwtTokenAuth(type, req, res, next) {
-  const rawToken = req.headers && req.headers.authorization.split(' ')[1];
-  const token = jwt.verify(rawToken, JWT_PRIV_KEY);
-  const expirationDate = new Date(token.exp * 1000);
-  if (token.type !== type) {
-    throw Error('Invalid token type');
+  if (!('headers' in req && 'authorization' in req.headers)) {
+    throw new AuthenticationError('Bearer token required!');
   }
-  if (expirationDate < new Date()) {
-    throw Error('Expired token');
+
+  const rawToken = req.headers.authorization && req.headers.authorization.split(' ')[1];
+  let token;
+  try {
+    token = jwt.verify(rawToken, JWT_PRIV_KEY);
+  } catch (err) {
+    err.status = StatusCodes.UNAUTHORIZED;
+    throw err;
+  }
+  if (token.type !== type) {
+    throw new AuthenticationError('Invalid token type');
   }
   const user = await User.findOne({ _id: token.userId });
   if (user) {
     if (user.tokenVersion !== token.version) {
-      throw Error('Invalid token version');
+      throw new AuthenticationError('Invalid token version');
     }
     req.user = user;
     return next();
   }
-  throw Error('User specified by token does not exist');
+  throw new AuthenticationError('User specified by token does not exist');
 }
 
 function jwtAccessTokenAuth(req, res, next) {
@@ -81,4 +100,5 @@ module.exports = {
   jwtRefreshTokenAuth,
   issueAccessJWT,
   issueRefreshJWT,
+  JWT_TOKEN_TYPE,
 };
