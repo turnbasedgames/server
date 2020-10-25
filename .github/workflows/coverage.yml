@@ -17,4 +17,5 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm ci
-      - run: npm run test:check-coverage
+      - run: nyc ava
+      - run: nyc check-coverage --lines 90 --branches 90 --statements 90 --functions 90
