@@ -18,4 +18,4 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: cd website && npm ci
       - name: lint
-	run: cd website && npm run lint
+        run: cd website && npm run lint
