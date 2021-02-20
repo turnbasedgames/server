@@ -5,12 +5,15 @@
 package main
 
 import (
-	"bytes"
+	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 const (
@@ -37,9 +40,13 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
+type Event struct {
+	EventType string
+}
+
 // Client is a middleman between the websocket connection and the hub.
 type Client struct {
-	hub *Hub
+	userId interface{}
 
 	// The websocket connection.
 	conn *websocket.Conn
@@ -53,9 +60,8 @@ type Client struct {
 // The application runs readPump in a per-connection goroutine. The application
 // ensures that there is at most one reader on a connection by executing all
 // reads from this goroutine.
-func (c *Client) readPump() {
+func (c *Client) readPump(mongoClient *mongo.Client) {
 	defer func() {
-		c.hub.unregister <- c
 		c.conn.Close()
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
@@ -69,8 +75,22 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-		c.hub.broadcast <- message
+		var event Event
+		err = json.Unmarshal(message, &event)
+		if err != nil {
+			log.Printf("error: %v", err)
+			break
+		}
+
+		log.Print(event.EventType)
+		switch event.EventType {
+		case "createGame":
+			initRoom(mongoClient, c)
+		case "joinGame":
+			// see if player can join the room
+		case "makeMove":
+			// see if player can make the move
+		}
 	}
 }
 
@@ -79,7 +99,7 @@ func (c *Client) readPump() {
 // A goroutine running writePump is started for each connection. The
 // application ensures that there is at most one writer to a connection by
 // executing all writes from this goroutine.
-func (c *Client) writePump() {
+func (c *Client) writePump(mongoClient *mongo.Client) {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -90,7 +110,7 @@ func (c *Client) writePump() {
 		case message, ok := <-c.send:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				// The hub closed the channel.
+				// channel is closed
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
@@ -121,17 +141,24 @@ func (c *Client) writePump() {
 }
 
 // serveWs handles websocket requests from the peer.
-func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+func serveWs(w http.ResponseWriter, r *http.Request, mongoClient *mongo.Client) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
-	client.hub.register <- client
+
+	// TODO: create a user account if one doesn't exist
+	usersCollection := mongoClient.Database("test").Collection("users")
+	res, err := usersCollection.InsertOne(context.Background(), bson.M{})
+	log.Printf("%+v\n", res)
+	if err != nil {
+		log.Fatal(err)
+	}
+	client := &Client{userId: res.InsertedID, conn: conn, send: make(chan []byte, 256)}
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.
-	go client.writePump()
-	go client.readPump()
+	go client.writePump(mongoClient)
+	go client.readPump(mongoClient)
 }
