@@ -5,21 +5,20 @@ import (
 	"log"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
-func initRoom(mongoClient *mongo.Client, c *Client) error {
-	dbName := "test"
+const dbName = "test"
+
+func initRoom(mongoClient *mongo.Client, c *Client) {
 	roomsCollection := mongoClient.Database(dbName).Collection("rooms")
 	usersRoomsCollection := mongoClient.Database(dbName).Collection("usersRooms")
 
 	// start transaction
-	// 1. create a room
-	// 2. create usersRooms
-	// end transaction
 	opts := options.Session().SetDefaultReadConcern(readconcern.Majority())
 	sess, err := mongoClient.StartSession(opts)
 	if err != nil {
@@ -29,10 +28,13 @@ func initRoom(mongoClient *mongo.Client, c *Client) error {
 
 	txnOpts := options.Transaction().SetReadPreference(readpref.PrimaryPreferred())
 	res, err := sess.WithTransaction(context.TODO(), func(sessCtx mongo.SessionContext) (interface{}, error) {
+		// create room
 		resRooms, errRooms := roomsCollection.InsertOne(sessCtx, bson.M{})
 		if errRooms != nil {
 			return nil, errRooms
 		}
+
+		// attempt to join user to the room
 		resUsersRooms, errUsersRooms := usersRoomsCollection.InsertOne(sessCtx, bson.M{
 			"roomId": resRooms.InsertedID,
 			"userId": c.userId,
@@ -46,6 +48,44 @@ func initRoom(mongoClient *mongo.Client, c *Client) error {
 		log.Fatal(err)
 	}
 	log.Printf("%+v\n", res)
+}
 
-	return nil
+func joinRoom(mongoClient *mongo.Client, c *Client, joinRoomId string) {
+	roomsCollection := mongoClient.Database(dbName).Collection("rooms")
+	usersRoomsCollection := mongoClient.Database(dbName).Collection("usersRooms")
+
+	// start transaction
+	opts := options.Session().SetDefaultReadConcern(readconcern.Majority())
+	sess, err := mongoClient.StartSession(opts)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer sess.EndSession(context.TODO())
+
+	txnOpts := options.Transaction().SetReadPreference(readpref.Primary())
+	res, err := sess.WithTransaction(context.TODO(), func(sessCtx mongo.SessionContext) (interface{}, error) {
+		var room bson.M
+		joinRoomObjectId, err := primitive.ObjectIDFromHex(joinRoomId)
+		if err != nil {
+			return nil, err
+		}
+		// find room that user wants to join
+		err = roomsCollection.FindOne(sessCtx, bson.D{{"_id", joinRoomObjectId}}).Decode(&room)
+		if err != nil {
+			return nil, err
+		}
+		// TODO: validations to whether the user can join the room
+		// 1. user can't already be in the room
+
+		// attempt to join user to the room
+		resUsersRooms, errUsersRooms := usersRoomsCollection.InsertOne(sessCtx, bson.M{
+			"roomId": room["_id"],
+			"userId": c.userId,
+		})
+		return resUsersRooms, errUsersRooms
+	}, txnOpts)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("%+v\n", res)
 }

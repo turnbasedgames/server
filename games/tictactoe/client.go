@@ -36,12 +36,14 @@ var (
 )
 
 var upgrader = websocket.Upgrader{
+	CheckOrigin:     func(r *http.Request) bool { return true },
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }
 
 type Event struct {
-	EventType string
+	EventType  string
+	JoinRoomId string
 }
 
 // Client is a middleman between the websocket connection and the hub.
@@ -83,11 +85,12 @@ func (c *Client) readPump(mongoClient *mongo.Client) {
 		}
 
 		log.Print(event.EventType)
+		log.Printf("%+v", event)
 		switch event.EventType {
-		case "createGame":
+		case "createRoom":
 			initRoom(mongoClient, c)
-		case "joinGame":
-			// see if player can join the room
+		case "joinRoom":
+			joinRoom(mongoClient, c, event.JoinRoomId)
 		case "makeMove":
 			// see if player can make the move
 		}
@@ -149,6 +152,7 @@ func serveWs(w http.ResponseWriter, r *http.Request, mongoClient *mongo.Client) 
 	}
 
 	// TODO: create a user account if one doesn't exist
+	// TODO: set user to online status
 	usersCollection := mongoClient.Database("test").Collection("users")
 	res, err := usersCollection.InsertOne(context.Background(), bson.M{})
 	log.Printf("%+v\n", res)
