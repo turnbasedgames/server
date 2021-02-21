@@ -75,7 +75,6 @@ func joinRoom(mongoClient *mongo.Client, c *Client, joinRoomId string) {
 			return nil, err
 		}
 		// TODO: validations to whether the user can join the room
-		// 1. user can't already be in the room
 
 		// attempt to join user to the room
 		resUsersRooms, errUsersRooms := usersRoomsCollection.InsertOne(sessCtx, bson.M{
