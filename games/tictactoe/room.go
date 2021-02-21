@@ -70,11 +70,13 @@ func joinRoom(mongoClient *mongo.Client, c *Client, joinRoomId string) {
 			return nil, err
 		}
 		// find room that user wants to join
-		err = roomsCollection.FindOne(sessCtx, bson.D{{"_id", joinRoomObjectId}}).Decode(&room)
+		err = roomsCollection.FindOne(sessCtx,
+			bson.D{primitive.E{Key: "_id", Value: joinRoomObjectId}}).Decode(&room)
 		if err != nil {
 			return nil, err
 		}
 		// TODO: validations to whether the user can join the room
+		// 1. user is already in the room
 
 		// attempt to join user to the room
 		resUsersRooms, errUsersRooms := usersRoomsCollection.InsertOne(sessCtx, bson.M{
@@ -87,4 +89,27 @@ func joinRoom(mongoClient *mongo.Client, c *Client, joinRoomId string) {
 		log.Fatal(err)
 	}
 	log.Printf("%+v\n", res)
+}
+
+func watchRoom(mongoClient *mongo.Client, joinRoomId string) {
+	roomsCollection := mongoClient.Database(dbName).Collection("rooms")
+	roomId, err := primitive.ObjectIDFromHex(joinRoomId)
+	matchStage := bson.D{
+		primitive.E{Key: "$match", Value: bson.D{
+			primitive.E{Key: "documentKey", Value: bson.D{
+				primitive.E{Key: "_id", Value: roomId}},
+			}},
+		}}
+	opts := options.ChangeStream().SetFullDocument(options.UpdateLookup)
+	changeStream, err := roomsCollection.Watch(context.TODO(), mongo.Pipeline{matchStage}, opts)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for changeStream.Next(context.TODO()) {
+		log.Println(changeStream.Current)
+	}
+}
+
+func unWatchRoom(mongoClient *mongo.Client, c *Client) {
+
 }

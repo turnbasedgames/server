@@ -91,6 +91,10 @@ func (c *Client) readPump(mongoClient *mongo.Client) {
 			initRoom(mongoClient, c)
 		case "joinRoom":
 			joinRoom(mongoClient, c, event.JoinRoomId)
+		case "watchRoom":
+
+		case "unwatchRoom":
+
 		case "makeMove":
 			// see if player can make the move
 		}
