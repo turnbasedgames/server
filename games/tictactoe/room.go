@@ -91,7 +91,7 @@ func joinRoom(mongoClient *mongo.Client, c *Client, joinRoomId string) {
 	log.Printf("%+v\n", res)
 }
 
-func watchRoom(mongoClient *mongo.Client, joinRoomId string) {
+func watchRoom(mongoClient *mongo.Client, c *Client, joinRoomId string) {
 	roomsCollection := mongoClient.Database(dbName).Collection("rooms")
 	roomId, err := primitive.ObjectIDFromHex(joinRoomId)
 	matchStage := bson.D{
@@ -105,11 +105,30 @@ func watchRoom(mongoClient *mongo.Client, joinRoomId string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	for changeStream.Next(context.TODO()) {
-		log.Println(changeStream.Current)
-	}
-}
 
-func unWatchRoom(mongoClient *mongo.Client, c *Client) {
+	go func() {
+		for {
+			if changeStream.TryNext(context.TODO()) {
+				var event bson.M
+				if err := changeStream.Decode(&event); err != nil {
+					log.Fatal(err)
+				}
+				jsonEvent, err := bson.MarshalExtJSON(event, true, true)
+				if err != nil {
+					log.Fatal(err)
+				}
+				c.send <- jsonEvent
+				continue
+			}
 
+			// If TryNext returns false, the next change is not yet available, the change stream was closed by the server,
+			// or an error occurred. TryNext should only be called again for the empty batch case.
+			if err := changeStream.Err(); err != nil {
+				log.Fatal(err)
+			}
+			if changeStream.ID() == 0 {
+				break
+			}
+		}
+	}()
 }

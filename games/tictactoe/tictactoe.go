@@ -10,7 +10,7 @@ const (
 
 type Board struct {
 	// list of clients, first player is X, second player is O
-	clients [2]Client
+	clients [2]*Client
 	state   [3][3]uint8
 }
 
@@ -20,9 +20,9 @@ type Move struct {
 }
 
 // creates a new initial board
-func newBoard(p1 Client, p2 Client) *Board {
+func newBoard(p1 *Client, p2 *Client) *Board {
 	return &Board{
-		clients: [2]Client{p1, p2},
+		clients: [2]*Client{p1, p2},
 		state: [3][3]uint8{
 			{EMPTY, EMPTY, EMPTY},
 			{EMPTY, EMPTY, EMPTY},
@@ -33,7 +33,7 @@ func newBoard(p1 Client, p2 Client) *Board {
 
 // does move validation, return an error if any problems happen
 // modifies board when making the move and returns nil
-func makeMove(plr Client, board *Board, move Move) error {
+func makeMove(plr *Client, board *Board, move Move) error {
 	// validate move
 	// is player a part of board?
 	plrIdx := -1
@@ -59,7 +59,7 @@ func makeMove(plr Client, board *Board, move Move) error {
 			}
 		}
 	}
-	var nextPlayerMove Client
+	var nextPlayerMove *Client
 	var moveValue uint8
 	if playerXMoveCount == playerOMoveCount {
 		nextPlayerMove = board.clients[0]

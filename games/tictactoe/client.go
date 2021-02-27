@@ -13,6 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -42,13 +43,17 @@ var upgrader = websocket.Upgrader{
 }
 
 type Event struct {
-	EventType  string
-	JoinRoomId string
+	EventType   string
+	JoinRoomId  string
+	WatchRoomId string
 }
 
 // Client is a middleman between the websocket connection and the hub.
 type Client struct {
 	userId interface{}
+
+	// active rooms being watched
+	activeWatches map[primitive.ObjectID]*mongo.ChangeStream
 
 	// The websocket connection.
 	conn *websocket.Conn
@@ -92,7 +97,7 @@ func (c *Client) readPump(mongoClient *mongo.Client) {
 		case "joinRoom":
 			joinRoom(mongoClient, c, event.JoinRoomId)
 		case "watchRoom":
-
+			watchRoom(mongoClient, c, event.WatchRoomId)
 		case "unwatchRoom":
 
 		case "makeMove":
@@ -163,7 +168,12 @@ func serveWs(w http.ResponseWriter, r *http.Request, mongoClient *mongo.Client) 
 	if err != nil {
 		log.Fatal(err)
 	}
-	client := &Client{userId: res.InsertedID, conn: conn, send: make(chan []byte, 256)}
+	client := &Client{
+		activeWatches: make(map[primitive.ObjectID]*mongo.ChangeStream),
+		userId:        res.InsertedID,
+		conn:          conn,
+		send:          make(chan []byte, 256),
+	}
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.
