@@ -1,6 +1,4 @@
 import React from 'react';
-import firebase from 'firebase/app';
-import 'firebase/auth';
 import {
   AppBar, Toolbar, Typography, InputBase, Button,
 } from '@material-ui/core';
@@ -9,88 +7,47 @@ import {
 } from '@material-ui/core/styles';
 import SearchIcon from '@material-ui/icons/Search';
 import {
-  Link, useHistory,
+  Link,
 } from 'react-router-dom';
-
-import { User } from '../models/user';
 
 type Props = {
   classes: any
-  setUser: React.Dispatch<React.SetStateAction<User | null>>
 };
 
-const NavBar = ({ classes, setUser }: Props) => {
-  const firebaseUser = firebase.auth().currentUser;
-  const showLogin = firebaseUser === null || firebaseUser.isAnonymous;
-  const history = useHistory();
-
-  return (
-    <div>
-      <AppBar className={classes.appBar} position="fixed">
-        <Toolbar variant="dense" className={classes.bar}>
-          <div className={classes.subBarLeft}>
-            <Link to="/games">
-              <Typography variant="h6">Platform</Typography>
-            </Link>
-            <Button
-              variant="contained"
-              color="primary"
-              disableElevation
-              className={classes.button}
-              onClick={(ev) => {
-                ev.preventDefault();
-                history.push('/create');
-              }}
-            >
-              Create
-            </Button>
+const NavBar = ({ classes }: Props) => (
+  <div>
+    <AppBar className={classes.appBar} position="fixed">
+      <Toolbar variant="dense" className={classes.bar}>
+        <div className={classes.subBarLeft}>
+          <Link to="/about">
+            <Typography variant="h6">Platform</Typography>
+          </Link>
+        </div>
+        <div className={classes.search}>
+          <div className={classes.searchIcon}>
+            <SearchIcon />
           </div>
-          <div className={classes.search}>
-            <div className={classes.searchIcon}>
-              <SearchIcon />
-            </div>
-            <InputBase
-              placeholder="Search…"
-              classes={{
-                root: classes.inputRoot,
-                input: classes.inputInput,
-              }}
-              inputProps={{ 'aria-label': 'search' }}
-            />
-          </div>
-          <div className={classes.subBarRight}>
-            {showLogin && (
-            <Button
-              variant="contained"
-              color="primary"
-              disableElevation
-              className={classes.button}
-              onClick={(ev) => {
-                ev.preventDefault();
-                const googleAuthProvider = new firebase.auth.GoogleAuthProvider();
-                firebase.auth().signInWithPopup(googleAuthProvider);
-              }}
-            >
-              sign in with google
-            </Button>
-            )}
-            {!showLogin && (
-            <Button
-              onClick={() => {
-                setUser(null);
-                firebase.auth().signOut();
-              }}
-            >
-              sign out
-            </Button>
-            )}
-          </div>
-
-        </Toolbar>
-      </AppBar>
-    </div>
-  );
-};
+          <InputBase
+            placeholder="Search…"
+            classes={{
+              root: classes.inputRoot,
+              input: classes.inputInput,
+            }}
+            inputProps={{ 'aria-label': 'search' }}
+          />
+        </div>
+        <div className={classes.subBarRight}>
+          <Button variant="contained" disableElevation className={classes.button}>
+            Login
+          </Button>
+          <Button variant="contained" color="primary" disableElevation className={classes.button}>
+            Signup
+          </Button>
+        </div>
+      </Toolbar>
+    </AppBar>
+  </div>
+);
 
 const styles = (theme: Theme) => createStyles({
   appBar: {

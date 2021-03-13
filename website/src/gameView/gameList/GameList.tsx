@@ -1,17 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   GridList, GridListTile, GridListTileBar, IconButton, Theme, withStyles, createStyles,
 } from '@material-ui/core';
 import { Info as InfoIcon } from '@material-ui/icons';
 import { useHistory } from 'react-router-dom';
-import axios from 'axios';
-import { User } from '../../models/user';
 
 type Game = {
   id: string,
-  name: string,
-  description: string,
-  creator: User
+  img: string,
+  title: string,
+  author: string
 };
 
 type Props = {
@@ -19,32 +17,30 @@ type Props = {
 };
 
 const GameList = ({ classes }: Props) => {
-  const [games, setGames] = useState<Game[]>([]);
-  useEffect(() => {
-    async function getGames() {
-      const res = await axios.get('/game?skip=0&limit=10');
-      setGames(res.data.games);
-    }
-    getGames();
-  }, []);
+  const gamesList: Game[] = new Array(100).fill({
+    id: '1',
+    img: 'https://miro.medium.com/max/700/1*Quh2GlRDeXuzdD4IoJu93g.jpeg',
+    title: 'title',
+    author: 'author',
+  } as Game);
   const history = useHistory();
 
   return (
     <div className={classes.root}>
       <GridList cols={0} spacing={20} cellHeight={250} className={classes.gridList}>
-        {games.map((game) => (
+        {gamesList.map((game) => (
           <GridListTile onClick={() => history.push(`/games/${game.id}`)} key={game.id} className={classes.tile}>
-            <img src="https://miro.medium.com/max/700/1*Quh2GlRDeXuzdD4IoJu93g.jpeg" alt={game.name} />
+            <img src={game.img} alt={game.title} />
             <GridListTileBar
-              title={game.name}
+              title={game.title}
               subtitle={(
                 <span>
                   by:
-                  {game.creator.id}
+                  {game.author}
                 </span>
                   )}
               actionIcon={(
-                <IconButton aria-label={`info about ${game.name}`} className={classes.icon}>
+                <IconButton aria-label={`info about ${game.title}`} className={classes.icon}>
                   <InfoIcon />
                 </IconButton>
                   )}
