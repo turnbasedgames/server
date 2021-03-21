@@ -56,7 +56,7 @@ async function spawnApp() {
   const { mongod, mongoUri } = await spawnDB();
   const env = {
     GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-    MONGODB_CONNECTION_URL: mongoUri,
+    MONGODB_CONNECTION_URL: `${mongoUri}&retryWrites=false`,
     PATH: process.env.PATH,
     PORT: await getPort(),
   };
