@@ -4,8 +4,6 @@ const axios = require('axios');
 const getPort = require('get-port');
 const { MongoMemoryReplSet } = require('mongodb-memory-server');
 
-const { deleteAllUsers } = require('./firebase');
-
 async function spawnDB() {
   const mongod = new MongoMemoryReplSet();
   await mongod.waitUntilRunning();
@@ -67,7 +65,6 @@ async function spawnApp() {
 
 async function killApp(app) {
   killServer(app.server);
-  await deleteAllUsers();
   await killDB(app.mongod);
 }
 

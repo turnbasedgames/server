@@ -3,14 +3,7 @@ const { StatusCodes } = require('http-status-codes');
 
 const { spawnApp, killApp } = require('../util/app');
 const { createUserCred } = require('../util/firebase');
-
-async function createAndAssert(t, api, userCred) {
-  const authToken = await userCred.user.getIdToken();
-  const { data, status } = await api.post('/user', {}, { headers: { authorization: authToken } });
-  t.is(status, StatusCodes.CREATED);
-  t.is(data.user.firebaseId, userCred.user.uid);
-  return data;
-}
+const { createUserAndAssert } = require('../util/api_util');
 
 test.before(async (t) => {
   const app = await spawnApp();
@@ -45,17 +38,17 @@ test('GET /user returns 404 when requester is authenticated but no corresponding
 test('GET /user returns user object', async (t) => {
   const { api } = t.context.app;
   const userCred = await createUserCred();
-  const user = await createAndAssert(t, api, userCred);
+  const user = await createUserAndAssert(t, api, userCred);
   const authToken = await userCred.user.getIdToken();
   const { status, data } = await api.get('/user', { headers: { authorization: authToken } });
   t.is(status, StatusCodes.OK);
-  t.deepEqual(data, user);
+  t.deepEqual(data, { user });
 });
 
 test('POST /user returns 409 if one already exists', async (t) => {
   const { api } = t.context.app;
   const userCred = await createUserCred();
-  await createAndAssert(t, api, userCred);
+  await createUserAndAssert(t, api, userCred);
   const authToken = await userCred.user.getIdToken();
   const { response: { status } } = await t.throwsAsync(api.post('/user', {}, { headers: { authorization: authToken } }));
   t.is(status, StatusCodes.CONFLICT);
@@ -64,5 +57,5 @@ test('POST /user returns 409 if one already exists', async (t) => {
 test('POST /user creates user', async (t) => {
   const { api } = t.context.app;
   const userCred = await createUserCred();
-  await createAndAssert(t, api, userCred);
+  await createUserAndAssert(t, api, userCred);
 });
