@@ -1,8 +1,6 @@
 const admin = require('firebase-admin');
 const firebase = require('firebase');
 
-console.log('GOOGLE_APPLICATION_CREDENTIALS_BASE64', process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64.length);
-console.log('FIREBASE_CONFIG', process.env.FIREBASE_CONFIG.length);
 admin.initializeApp({
   credential: process.env.GOOGLE_APPLICATION_CREDENTIALS
     ? admin.credential.applicationDefault()
