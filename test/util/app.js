@@ -53,11 +53,16 @@ function killServer(server) {
 async function spawnApp() {
   const { mongod, mongoUri } = await spawnDB();
   const env = {
-    GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
     MONGODB_CONNECTION_URL: `${mongoUri}&retryWrites=false`,
     PATH: process.env.PATH,
     PORT: await getPort(),
   };
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    env.GOOGLE_APPLICATION_CREDENTIALS = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  }
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
+    env.GOOGLE_APPLICATION_CREDENTIALS_BASE64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64;
+  }
   const api = axios.create({ baseURL: `http://localhost:${env.PORT}` });
   const server = await spawnServer(env, api);
   return { api, mongod, server };
