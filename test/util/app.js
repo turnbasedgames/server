@@ -63,8 +63,6 @@ async function spawnApp() {
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
     env.GOOGLE_APPLICATION_CREDENTIALS_BASE64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64;
   }
-  console.log('GOOGLE_APPLICATION_CREDENTIALS_BASE64', env.GOOGLE_APPLICATION_CREDENTIALS_BASE64.length);
-  console.log('FIREBASE_CONFIG', process.env.FIREBASE_CONFIG.length);
   const api = axios.create({ baseURL: `http://localhost:${env.PORT}` });
   const server = await spawnServer(env, api);
   return { api, mongod, server };
