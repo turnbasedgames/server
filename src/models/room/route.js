@@ -3,10 +3,11 @@ const { StatusCodes } = require('http-status-codes');
 const asyncHandler = require('express-async-handler');
 const { celebrate, Segments } = require('celebrate');
 const mongoose = require('mongoose');
-const assert = require('assert');
+const assert = require('assert').strict;
 
 const Joi = require('../../middleware/joi');
 const auth = require('../../middleware/auth');
+const Game = require('../game/game');
 const Room = require('./room');
 const RoomUser = require('./roomUser');
 
@@ -32,15 +33,15 @@ router.get('/',
 router.post('/', auth, asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const roomRaw = req.body;
-  roomRaw.user = userId;
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  let room = await Room.create(roomRaw, { session });
-  assert(room, 'Failed to create room');
-  const roomUser = await RoomUser.create({ room: room.id, user: userId });
-  assert(roomUser, 'Failed to create room user link');
-  session.endSession();
-  room = await room.populate('user').populate('game').populate('game.creator').execPopulate();
+  const room = new Room({ ...roomRaw, leader: userId });
+  const roomUser = new RoomUser({ room: room.id, user: userId });
+  await mongoose.connection.transaction(async (session) => {
+    const gameCount = await Game.countDocuments({ _id: room.game });
+    assert(gameCount === 1, 'room.game must exist!');
+    await room.save({ session });
+    await roomUser.save({ session });
+  });
+  await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
   res.status(StatusCodes.OK).json({ room });
 }));
 
@@ -54,7 +55,8 @@ router.post('/:id/join', celebrate({
   const room = await Room.findById(id);
   const roomUser = new RoomUser({ room: room.id, user: userId });
   await roomUser.save();
-  res.status(StatusCodes.OK);
+  await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
+  res.status(StatusCodes.OK).json({ room });
 }));
 
 router.get('/:id',
@@ -64,7 +66,7 @@ router.get('/:id',
     }),
   }), asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const room = await Room.findById(id).populate('game').populate('game.creator').populate('leader');
+    const room = await Room.findById(id).populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } });
     res.status(StatusCodes.OK).json({ room });
   }));
 
