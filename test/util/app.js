@@ -40,9 +40,7 @@ function killServer(server) {
 
 async function spawnApp() {
   const env = {
-    MONGODB_CONNECTION_URL: 'mongodb://localhost:27017/test?replicaSet=testrs',
-    MONGO_DATABASE: 'test',
-    MONGO_REPLICA_SET: 'test',
+    MONGODB_CONNECTION_URL: 'mongodb://localhost:27017/test',
     PATH: process.env.PATH,
     PORT: await getPort(),
   };
