@@ -10,7 +10,6 @@ const options = {
 };
 
 function setupDB() {
-  console.log(process.env.MONGODB_CONNECTION_URL);
   return mongoose.connect(process.env.MONGODB_CONNECTION_URL, options);
 }
 
