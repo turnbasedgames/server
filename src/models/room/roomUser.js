@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const uniqueValidator = require('mongoose-unique-validator');
 
 const { Schema } = mongoose;
 
@@ -17,6 +18,7 @@ const RoomUserSchema = new Schema({
   },
 }, { timestamps: true });
 
+RoomUserSchema.index({ room: 1, user: 1 }, { unique: true });
 RoomUserSchema.method('toJSON', function toJSON() {
   return {
     id: this.id,
@@ -24,5 +26,6 @@ RoomUserSchema.method('toJSON', function toJSON() {
     user: this.user,
   };
 });
+RoomUserSchema.plugin(uniqueValidator);
 
 module.exports = mongoose.model('RoomUser', RoomUserSchema);

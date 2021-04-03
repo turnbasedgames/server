@@ -81,6 +81,22 @@ router.get('/:id/user',
     res.status(StatusCodes.OK).json({ users: roomUsers.map((roomUser) => roomUser.user) });
   }));
 
+router.get('/:roomId/user/:userId',
+  celebrate({
+    [Segments.PARAMS]: Joi.object().keys({
+      roomId: Joi.objectId(),
+      userId: Joi.objectId(),
+    }),
+  }), asyncHandler(async (req, res) => {
+    const { roomId, userId } = req.params;
+    const roomUser = await RoomUser.find({ room: roomId, user: userId });
+    if (roomUser.length >= 1) {
+      res.sendStatus(StatusCodes.OK);
+    } else {
+      res.sendStatus(StatusCodes.NOT_FOUND);
+    }
+  }));
+
 router.get('/user/:id', celebrate({
   [Segments.PARAMS]: Joi.object().keys({
     id: Joi.objectId(),
