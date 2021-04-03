@@ -42,7 +42,7 @@ router.post('/', auth, asyncHandler(async (req, res) => {
     await roomUser.save({ session });
   });
   await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
-  res.status(StatusCodes.OK).json({ room });
+  res.status(StatusCodes.CREATED).json({ room });
 }));
 
 router.post('/:id/join', celebrate({
@@ -56,7 +56,7 @@ router.post('/:id/join', celebrate({
   const roomUser = new RoomUser({ room: room.id, user: userId });
   await roomUser.save();
   await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
-  res.status(StatusCodes.OK).json({ room });
+  res.status(StatusCodes.CREATED).json({ room });
 }));
 
 router.get('/:id',
