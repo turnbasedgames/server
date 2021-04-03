@@ -39,9 +39,8 @@ function killServer(server) {
 }
 
 async function spawnApp() {
-  const mongoUri = 'mongodb://localhost';
   const env = {
-    MONGODB_CONNECTION_URL: `${mongoUri}&retryWrites=false`,
+    MONGODB_CONNECTION_URL: 'mongodb://localhost:27020/test-rs',
     PATH: process.env.PATH,
     PORT: await getPort(),
   };
