@@ -72,6 +72,33 @@ router.post('/:id/join', celebrate({
   res.status(StatusCodes.CREATED).json({ room });
 }));
 
+router.post('/:id/move', celebrate({
+  [Segments.PARAMS]: Joi.object().keys({
+    id: Joi.objectId(),
+  }),
+}), auth, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const { id } = req.params;
+  const move = req.body;
+
+  if (!(await RoomUser.isUserInRoom(id, userId))) {
+    const err = new Error('user is not in room!');
+    err.status = StatusCodes.BAD_REQUEST;
+    throw err;
+  }
+
+  let room = await Room.findById(id).populate('game');
+  const userCode = await getUserCode(room.game);
+
+  await mongoose.connection.transaction(async (session) => {
+    room = await Room.findById(id).session(session);
+    room.state = userCode.onPlayerMove(null, userId, move, room.state);
+    await room.save({ session });
+  });
+
+  res.status(StatusCodes.OK);
+}));
+
 router.get('/:id',
   celebrate({
     [Segments.PARAMS]: Joi.object().keys({
