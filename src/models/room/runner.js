@@ -1,7 +1,7 @@
 const { NodeVM } = require('vm2');
 const axios = require('axios');
 
-const logger = require('../../../logger');
+const logger = require('../../logger');
 
 async function getUserCode(game) {
   logger.info('getting game code', { url: game.githubURL, id: game.id });
@@ -14,5 +14,26 @@ async function getUserCode(game) {
   const userCode = vm.run(userCodeRaw);
   return userCode;
 }
+
+// async function main() {
+//   const userCode = await getUserCode({
+//     githubURL: 'https://github.com/turnbasedgames/tictactoe',
+//     commitSHA: 'master',
+//   });
+
+//   const boardstate = userCode.onRoomStart();
+//   logger.info(JSON.stringify(boardstate, null, 2));
+// }
+
+// main();
+
+/**
+ * 1. start game
+ * 2. in game
+ *  a. player joining
+ *  b. player makes move
+ *  c. determine game is over
+ * 3. end game
+ */
 
 module.exports = { getUserCode };

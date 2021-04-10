@@ -9,6 +9,7 @@ const auth = require('../../middleware/auth');
 const Game = require('../game/game');
 const Room = require('./room');
 const RoomUser = require('./roomUser');
+const { getUserCode } = require('./runner');
 
 const PATH = '/room';
 const router = express.Router();
@@ -36,6 +37,13 @@ router.post('/', auth, asyncHandler(async (req, res) => {
   const roomUser = new RoomUser({ room: room.id, user: userId });
   await room.validate();
   await roomUser.validate();
+  await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
+
+  const userCode = await getUserCode(room.game);
+  let boardGameState = userCode.onRoomStart();
+  boardGameState = userCode.onPlayerJoin(null, userId, boardGameState);
+  room.state = boardGameState;
+
   await mongoose.connection.transaction(async (session) => {
     const gameCount = await Game.countDocuments({ _id: room.game });
     if (gameCount !== 1) {
@@ -46,7 +54,7 @@ router.post('/', auth, asyncHandler(async (req, res) => {
     await room.save({ session });
     await roomUser.save({ session });
   });
-  await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
+
   res.status(StatusCodes.CREATED).json({ room });
 }));
 
