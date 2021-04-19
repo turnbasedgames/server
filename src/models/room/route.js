@@ -40,8 +40,8 @@ router.post('/', auth, asyncHandler(async (req, res) => {
   await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
 
   const userCode = await getUserCode(room.game);
-  let boardGameState = userCode.onRoomStart();
-  boardGameState = userCode.onPlayerJoin(null, userId, boardGameState);
+  let boardGameState = userCode.startRoom();
+  boardGameState = userCode.joinPlayer(userId, boardGameState);
   room.state = boardGameState;
 
   await mongoose.connection.transaction(async (session) => {
@@ -65,10 +65,21 @@ router.post('/:id/join', celebrate({
 }), auth, asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const { id } = req.params;
-  const room = await Room.findById(id);
+
+  let room = await Room.findById(id).populate('game');
+  const userCode = await getUserCode(room.game);
   const roomUser = new RoomUser({ room: room.id, user: userId });
-  await roomUser.save();
-  await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
+  await roomUser.validate();
+
+  await mongoose.connection.transaction(async (session) => {
+    await roomUser.save({ session });
+    room = await Room.findById(id).session(session);
+    room.state = userCode.joinPlayer(userId, room.state);
+    room.markModified('state');
+    await room.save({ session });
+  });
+
+  await room.populate('leader').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
   res.status(StatusCodes.CREATED).json({ room });
 }));
 
@@ -92,7 +103,8 @@ router.post('/:id/move', celebrate({
 
   await mongoose.connection.transaction(async (session) => {
     room = await Room.findById(id).session(session);
-    room.state = userCode.onPlayerMove(null, userId, move, room.state);
+    room.state = userCode.playerMove(userId, move, room.state);
+    room.markModified('state');
     await room.save({ session });
   });
 
@@ -104,10 +116,56 @@ router.get('/:id',
     [Segments.PARAMS]: Joi.object().keys({
       id: Joi.objectId(),
     }),
+    [Segments.QUERY]: Joi.object().keys({
+      watch: Joi.boolean(),
+    }),
   }), asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const room = await Room.findById(id).populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } });
-    res.status(StatusCodes.OK).json({ room });
+    const { watch } = req.query;
+    const room = await Room.findById(id);
+
+    if (!room) {
+      res.sendStatus(StatusCodes.NOT_FOUND);
+      return;
+    }
+
+    if (watch) {
+      res.header('transfer-encoding', 'chunked');
+      res.set('Content-Type', 'text/json');
+      logger.info('watch send initial room', { room });
+      res.write(JSON.stringify({ room }));
+
+      const pipeline = [{ $match: { 'fullDocument._id': id } }];
+      const roomWatch = Room.watch(pipeline, { fullDocument: 'updateLookup' });
+      roomWatch.on('change', (doc) => {
+        const { _id: { _data: resumeToken }, fullDocument } = doc;
+        const { _id: roomid } = fullDocument;
+        logger.info('watch received change event', { ...doc, fullDocument: { _id: roomid } });
+        res.write(JSON.stringify({ room: fullDocument, resumeToken }));
+      });
+      roomWatch.on('close', () => {
+        logger.info('watch closed');
+        res.end();
+      });
+      roomWatch.on('end', () => {
+        logger.info('watch end');
+        res.end();
+      });
+      roomWatch.on('resumeTokenChanged', (newToken) => {
+        logger.info('watch resume token changed', { newToken });
+        res.end();
+      });
+      roomWatch.on('error', (err) => {
+        logger.info('watch error', { err });
+        res.end();
+      });
+      req.on('close', () => {
+        roomWatch.removeAllListeners();
+      });
+    } else {
+      await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
+      res.status(StatusCodes.OK).json({ room });
+    }
   }));
 
 router.get('/:id/user',

@@ -16,7 +16,7 @@ const RoomSchema = new Schema({
     index: true,
   },
   state: {
-    type: Map,
+    type: Schema.Types.Mixed,
     required: true,
     default: {},
   },
