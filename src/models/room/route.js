@@ -35,6 +35,7 @@ router.post('/', auth, asyncHandler(async (req, res) => {
   const room = new Room({ ...roomRaw, leader: userId });
   const roomUser = new RoomUser({ room: room.id, user: userId });
   await room.validate();
+  await roomUser.validate();
   await mongoose.connection.transaction(async (session) => {
     const gameCount = await Game.countDocuments({ _id: room.game });
     if (gameCount !== 1) {
