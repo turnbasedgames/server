@@ -36,22 +36,23 @@ router.post('/', auth, asyncHandler(async (req, res) => {
   const roomRaw = req.body;
   const room = new Room({ ...roomRaw, leader: userId });
   const roomUser = new RoomUser({ room: room.id, user: userId });
-  await room.validate();
   await roomUser.validate();
-  await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
+  await room.validate();
 
+  const gameCount = await Game.countDocuments({ _id: room.game });
+  if (gameCount !== 1) {
+    const err = new Error('room.game must exist!');
+    err.status = StatusCodes.BAD_REQUEST;
+    throw err;
+  }
+
+  await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
   const userCode = await getUserCode(room.game);
   let boardGameState = userCode.startRoom();
   boardGameState = userCode.joinPlayer(userId, boardGameState);
   room.state = boardGameState;
 
   await mongoose.connection.transaction(async (session) => {
-    const gameCount = await Game.countDocuments({ _id: room.game });
-    if (gameCount !== 1) {
-      const err = new Error('room.game must exist!');
-      err.status = StatusCodes.BAD_REQUEST;
-      throw err;
-    }
     await room.save({ session });
     await roomUser.save({ session });
   });
