@@ -10,6 +10,7 @@ const Game = require('../game/game');
 const Room = require('./room');
 const RoomUser = require('./roomUser');
 const { getUserCode } = require('./runner');
+const logger = require('../../logger');
 
 const PATH = '/room';
 const router = express.Router();
