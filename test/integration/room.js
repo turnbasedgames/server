@@ -68,14 +68,40 @@ test('POST /room/:id/join joins a game', async (t) => {
   const userCredOne = await createUserCred();
   const userCredTwo = await createUserCred();
   const userOne = await createUserAndAssert(t, api, userCredOne);
-  await createUserAndAssert(t, api, userCredTwo);
+  const userTwo = await createUserAndAssert(t, api, userCredTwo);
   const authTokenTwo = await userCredTwo.user.getIdToken();
   const game = await createGameAndAssert(t, api, userCredOne, userOne);
   const room = await createRoomAndAssert(t, api, userCredOne, game, userOne);
-  const { data, status } = await api.post(`/room/${room.id}/join`, {},
+  const { data: { room: resRoom }, status } = await api.post(`/room/${room.id}/join`, {},
     { headers: { authorization: authTokenTwo } });
   t.is(status, StatusCodes.CREATED);
-  t.deepEqual(data.room, room);
+  t.deepEqual(resRoom.leader, userOne);
+  t.deepEqual(resRoom.game, game);
+  t.deepEqual(resRoom.state, {
+    board: [
+      [
+        null,
+        null,
+        null,
+      ],
+      [
+        null,
+        null,
+        null,
+      ],
+      [
+        null,
+        null,
+        null,
+      ],
+    ],
+    plrs: resRoom.state.plrs,
+    state: 'IN_GAME',
+    winner: null,
+  });
+  t.is(resRoom.state.plrs.length, 2);
+  t.true(resRoom.state.plrs.indexOf(userOne.id) !== -1);
+  t.true(resRoom.state.plrs.indexOf(userTwo.id) !== -1);
 });
 
 test('GET /room/:id returns a room', async (t) => {
