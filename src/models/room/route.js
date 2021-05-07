@@ -110,7 +110,7 @@ router.post('/:id/move', celebrate({
     await room.save({ session });
   });
 
-  res.status(StatusCodes.OK);
+  res.sendStatus(StatusCodes.OK);
 }));
 
 router.get('/:id',

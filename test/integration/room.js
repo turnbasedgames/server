@@ -6,6 +6,50 @@ const { spawnApp, killApp } = require('../util/app');
 const { createUserCred } = require('../util/firebase');
 const { createUserAndAssert, createGameAndAssert, createRoomAndAssert } = require('../util/api_util');
 
+async function startTicTacToeRoom(t) {
+  const { api } = t.context.app;
+  const userCredOne = await createUserCred();
+  const userCredTwo = await createUserCred();
+  const userOne = await createUserAndAssert(t, api, userCredOne);
+  const userTwo = await createUserAndAssert(t, api, userCredTwo);
+  const authTokenTwo = await userCredTwo.user.getIdToken();
+  const game = await createGameAndAssert(t, api, userCredOne, userOne);
+  const room = await createRoomAndAssert(t, api, userCredOne, game, userOne);
+  const { data: { room: resRoom }, status } = await api.post(`/room/${room.id}/join`, {},
+    { headers: { authorization: authTokenTwo } });
+  t.is(status, StatusCodes.CREATED);
+  t.deepEqual(resRoom.leader, userOne);
+  t.deepEqual(resRoom.game, game);
+  t.deepEqual(resRoom.state, {
+    board: [
+      [
+        null,
+        null,
+        null,
+      ],
+      [
+        null,
+        null,
+        null,
+      ],
+      [
+        null,
+        null,
+        null,
+      ],
+    ],
+    plrs: resRoom.state.plrs,
+    state: 'IN_GAME',
+    winner: null,
+  });
+  t.is(resRoom.state.plrs.length, 2);
+  t.true(resRoom.state.plrs.indexOf(userOne.id) !== -1);
+  t.true(resRoom.state.plrs.indexOf(userTwo.id) !== -1);
+  return {
+    userOne, userTwo, userCredOne, userCredTwo, game, room: resRoom,
+  };
+}
+
 test.before(async (t) => {
   const app = await spawnApp();
   // eslint-disable-next-line no-param-reassign
@@ -64,44 +108,25 @@ test('POST /room returns \'room.game must exist\' if no room', async (t) => {
 });
 
 test('POST /room/:id/join joins a game', async (t) => {
+  await startTicTacToeRoom(t);
+});
+
+test('POST /room/:id/move invokes creator backend to modify the game state', async (t) => {
+  const {
+    userOne, userCredOne, userCredTwo, room,
+  } = await startTicTacToeRoom(t);
   const { api } = t.context.app;
-  const userCredOne = await createUserCred();
-  const userCredTwo = await createUserCred();
-  const userOne = await createUserAndAssert(t, api, userCredOne);
-  const userTwo = await createUserAndAssert(t, api, userCredTwo);
-  const authTokenTwo = await userCredTwo.user.getIdToken();
-  const game = await createGameAndAssert(t, api, userCredOne, userOne);
-  const room = await createRoomAndAssert(t, api, userCredOne, game, userOne);
-  const { data: { room: resRoom }, status } = await api.post(`/room/${room.id}/join`, {},
-    { headers: { authorization: authTokenTwo } });
-  t.is(status, StatusCodes.CREATED);
-  t.deepEqual(resRoom.leader, userOne);
-  t.deepEqual(resRoom.game, game);
-  t.deepEqual(resRoom.state, {
-    board: [
-      [
-        null,
-        null,
-        null,
-      ],
-      [
-        null,
-        null,
-        null,
-      ],
-      [
-        null,
-        null,
-        null,
-      ],
-    ],
-    plrs: resRoom.state.plrs,
-    state: 'IN_GAME',
-    winner: null,
-  });
-  t.is(resRoom.state.plrs.length, 2);
-  t.true(resRoom.state.plrs.indexOf(userOne.id) !== -1);
-  t.true(resRoom.state.plrs.indexOf(userTwo.id) !== -1);
+
+  // determine who's turn it is
+  const { state: { plrs } } = room;
+  const plr = plrs[0];
+  const userCred = userOne.id === plr ? userCredOne : userCredTwo;
+  const authToken = await userCred.user.getIdToken();
+
+  // make move
+  const { status } = await api.post(`/room/${room.id}/move`, { x: 0, y: 0 },
+    { headers: { authorization: authToken } });
+  t.is(status, StatusCodes.OK);
 });
 
 test('GET /room/:id returns a room', async (t) => {
