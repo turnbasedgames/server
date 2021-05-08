@@ -148,6 +148,21 @@ test('POST /room/:id/move provides error if user code throws an error', async (t
   t.is(status, StatusCodes.INTERNAL_SERVER_ERROR);
 });
 
+test('POST /room/:id/move provides error if user tries to make move when not in the room', async (t) => {
+  const { api } = t.context.app;
+  const userCredOne = await createUserCred();
+  const userCredTwo = await createUserCred();
+  const userOne = await createUserAndAssert(t, api, userCredOne);
+  await createUserAndAssert(t, api, userCredTwo);
+  const authTokenTwo = await userCredTwo.user.getIdToken();
+  const game = await createGameAndAssert(t, api, userCredOne, userOne);
+  const room = await createRoomAndAssert(t, api, userCredOne, game, userOne);
+  const { response: { status } } = await t.throwsAsync(api.post(`/room/${room.id}/move`,
+    { x: 0, y: 0 },
+    { headers: { authorization: authTokenTwo } }));
+  t.is(status, StatusCodes.BAD_REQUEST);
+});
+
 test('GET /room/:id returns a room', async (t) => {
   const { api } = t.context.app;
   const userCred = await createUserCred();
