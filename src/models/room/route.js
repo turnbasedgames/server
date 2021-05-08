@@ -118,57 +118,10 @@ router.get('/:id',
     [Segments.PARAMS]: Joi.object().keys({
       id: Joi.objectId(),
     }),
-    [Segments.QUERY]: Joi.object().keys({
-      watch: Joi.boolean(),
-    }),
   }), asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { watch } = req.query;
-    const room = await Room.findById(id);
-
-    if (!room) {
-      res.sendStatus(StatusCodes.NOT_FOUND);
-      return;
-    }
-
-    if (watch) {
-      res.header('transfer-encoding', 'chunked');
-      res.set('Content-Type', 'text/json');
-      logger.info('watch send initial room', { room });
-      res.write(JSON.stringify({ room }));
-
-      const pipeline = [{ $match: { 'fullDocument._id': id } }];
-      const roomWatch = Room.watch(pipeline, { fullDocument: 'updateLookup' });
-      roomWatch.on('change', (doc) => {
-        const { _id: { _data: resumeToken }, fullDocument } = doc;
-        const { _id: roomid } = fullDocument;
-        logger.info('watch received change event', { ...doc, fullDocument: { _id: roomid } });
-        res.write(JSON.stringify({ room: fullDocument, resumeToken }));
-      });
-      roomWatch.on('close', () => {
-        logger.info('watch closed');
-        res.end();
-      });
-      roomWatch.on('end', () => {
-        logger.info('watch end');
-        res.end();
-      });
-      roomWatch.on('resumeTokenChanged', (newToken) => {
-        logger.info('watch resume token changed', { newToken });
-        res.end();
-      });
-      roomWatch.on('error', (err) => {
-        logger.info('watch error', { err });
-        res.end();
-      });
-      req.on('close', () => {
-        roomWatch.removeAllListeners();
-      });
-    } else {
-      await room.populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
-      res.status(StatusCodes.OK).json({ room });
-    }
-  }));
+    const room = await Room.findById(id).populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } });
+    res.status(StatusCodes.OK).json({ room });
 
 router.get('/:id/user',
   celebrate({
