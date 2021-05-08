@@ -122,6 +122,7 @@ router.get('/:id',
     const { id } = req.params;
     const room = await Room.findById(id).populate('leader').populate('game').populate({ path: 'game', populate: { path: 'creator' } });
     res.status(StatusCodes.OK).json({ room });
+  }));
 
 router.get('/:id/user',
   celebrate({
