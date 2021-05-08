@@ -129,6 +129,25 @@ test('POST /room/:id/move invokes creator backend to modify the game state', asy
   t.is(status, StatusCodes.OK);
 });
 
+test('POST /room/:id/move provides error if user code throws an error', async (t) => {
+  const {
+    userOne, userCredOne, userCredTwo, room,
+  } = await startTicTacToeRoom(t);
+  const { api } = t.context.app;
+
+  // determine who's turn it is, and have wrong user make a move
+  const { state: { plrs } } = room;
+  const plr = plrs[0];
+  const userCred = userOne.id === plr ? userCredTwo : userCredOne;
+  const authToken = await userCred.user.getIdToken();
+
+  // make move
+  const { response: { status } } = await t.throwsAsync(api.post(`/room/${room.id}/move`,
+    { x: 0, y: 0 },
+    { headers: { authorization: authToken } }));
+  t.is(status, StatusCodes.INTERNAL_SERVER_ERROR);
+});
+
 test('GET /room/:id returns a room', async (t) => {
   const { api } = t.context.app;
   const userCred = await createUserCred();
