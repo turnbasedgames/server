@@ -127,6 +127,16 @@ test('POST /room/:id/move invokes creator backend to modify the game state', asy
   const { status } = await api.post(`/room/${room.id}/move`, { x: 0, y: 0 },
     { headers: { authorization: authToken } });
   t.is(status, StatusCodes.OK);
+
+  const { data: { room: { state: { board } } }, status: getStatus } = await api.get(
+    `/room/${room.id}`,
+  );
+  t.is(getStatus, StatusCodes.OK);
+  t.deepEqual([
+    ['X', null, null],
+    [null, null, null],
+    [null, null, null]],
+  board);
 });
 
 test('POST /room/:id/move provides error if user code throws an error', async (t) => {
