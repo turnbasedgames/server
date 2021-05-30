@@ -11,9 +11,18 @@ const Room = require('./room');
 const RoomState = require('./roomState');
 const RoomUser = require('./roomUser');
 const { getUserCode } = require('./runner');
+const { publisher } = require('../../setupRedis');
 
 const PATH = '/room';
 const router = express.Router();
+
+// setup redis publisher and subscriber
+// setup events for error
+
+// in an endpoint
+// on("message"), if channel is the right roomid, process message
+// on("subscribe"), if channel is the right roomid, disconnect listener
+// subscribe()
 
 router.get('/',
   celebrate({
@@ -56,6 +65,7 @@ router.post('/', auth, asyncHandler(async (req, res) => {
     await room.save({ session });
     await roomUser.save({ session });
     await roomState.save({ session });
+    await publisher.publishAsync(room.id, roomState.version);
   });
 
   await room.populate('latestState').execPopulate();
@@ -88,6 +98,7 @@ router.post('/:id/join', celebrate({
     room.latestState = newRoomState.id;
     room.markModified('latestState');
     await room.save({ session });
+    await publisher.publishAsync(room.id, newRoomState.version);
   });
 
   await room.populate('leader').populate('latestState').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
@@ -124,6 +135,7 @@ router.post('/:id/move', celebrate({
     room.markModified('latestState');
     await newRoomState.save({ session });
     await room.save({ session });
+    await publisher.publishAsync(room.id, newRoomState.version);
   });
 
   res.sendStatus(StatusCodes.OK);
