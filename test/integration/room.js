@@ -20,7 +20,7 @@ async function startTicTacToeRoom(t) {
   t.is(status, StatusCodes.CREATED);
   t.deepEqual(resRoom.leader, userOne);
   t.deepEqual(resRoom.game, game);
-  t.deepEqual(resRoom.state, {
+  t.deepEqual(resRoom.latestState.state, {
     board: [
       [
         null,
@@ -38,13 +38,13 @@ async function startTicTacToeRoom(t) {
         null,
       ],
     ],
-    plrs: resRoom.state.plrs,
+    plrs: resRoom.latestState.state.plrs,
     state: 'IN_GAME',
     winner: null,
   });
-  t.is(resRoom.state.plrs.length, 2);
-  t.true(resRoom.state.plrs.indexOf(userOne.id) !== -1);
-  t.true(resRoom.state.plrs.indexOf(userTwo.id) !== -1);
+  t.is(resRoom.latestState.state.plrs.length, 2);
+  t.true(resRoom.latestState.state.plrs.indexOf(userOne.id) !== -1);
+  t.true(resRoom.latestState.state.plrs.indexOf(userTwo.id) !== -1);
   return {
     userOne, userTwo, userCredOne, userCredTwo, game, room: resRoom,
   };
@@ -81,18 +81,6 @@ test('POST /room creates a room', async (t) => {
   await createRoomAndAssert(t, api, userCred, game, user);
 });
 
-test('POST /room responds 400 if data is missing fields', async (t) => {
-  const { api } = t.context.app;
-  const userCred = await createUserCred();
-  await createUserAndAssert(t, api, userCred);
-  const authToken = await userCred.user.getIdToken();
-  const { response: { data: { message }, status } } = await t.throwsAsync(
-    api.post('/room', {}, { headers: { authorization: authToken } }),
-  );
-  t.is(status, StatusCodes.BAD_REQUEST);
-  t.true(message.includes('Room validation failed'), message);
-});
-
 test('POST /room returns \'room.game must exist\' if no room', async (t) => {
   const { api } = t.context.app;
   const userCred = await createUserCred();
@@ -118,7 +106,7 @@ test('POST /room/:id/move invokes creator backend to modify the game state', asy
   const { api } = t.context.app;
 
   // determine who's turn it is
-  const { state: { plrs } } = room;
+  const { latestState: { state: { plrs } } } = room;
   const plr = plrs[0];
   const userCred = userOne.id === plr ? userCredOne : userCredTwo;
   const authToken = await userCred.user.getIdToken();
@@ -127,10 +115,10 @@ test('POST /room/:id/move invokes creator backend to modify the game state', asy
   const { status } = await api.post(`/room/${room.id}/move`, { x: 0, y: 0 },
     { headers: { authorization: authToken } });
   t.is(status, StatusCodes.OK);
-
-  const { data: { room: { state: { board } } }, status: getStatus } = await api.get(
-    `/room/${room.id}`,
-  );
+  const {
+    data: { room: { latestState: { state: { board } } } },
+    status: getStatus,
+  } = await api.get(`/room/${room.id}`);
   t.is(getStatus, StatusCodes.OK);
   t.deepEqual([
     ['X', null, null],
@@ -146,7 +134,7 @@ test('POST /room/:id/move provides error if user code throws an error', async (t
   const { api } = t.context.app;
 
   // determine who's turn it is, and have wrong user make a move
-  const { state: { plrs } } = room;
+  const { latestState: { state: { plrs } } } = room;
   const plr = plrs[0];
   const userCred = userOne.id === plr ? userCredTwo : userCredOne;
   const authToken = await userCred.user.getIdToken();

@@ -31,7 +31,7 @@ async function createRoomAndAssert(t, api, userCred, game, leader) {
   t.is(status, StatusCodes.CREATED);
   t.deepEqual(room.leader, leader);
   t.deepEqual(room.game, game);
-  t.deepEqual(room.state, {
+  t.deepEqual(room.latestState.state, {
     board: [
       [
         null,
