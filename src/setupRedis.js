@@ -1,16 +1,16 @@
 const redis = require('redis');
-const { promisify } = require('util');
+
+const Publisher = require('./util/publisher');
+const Subscriber = require('./util/subscriber');
 
 const client = redis.createClient({
   url: process.env.REDIS_CONNECTION_URL,
 });
 
-const subscriber = client.duplicate();
-
-const publisher = client.duplicate();
-publisher.publishAsync = promisify(publisher.publish).bind(publisher);
+const publisher = new Publisher(client.duplicate());
+const subscriber = new Subscriber(client.duplicate());
 
 module.exports = {
-  subscriber,
   publisher,
+  subscriber,
 };

@@ -4,7 +4,7 @@ async function createGameAndAssert(t, api, userCred, user) {
   const gameRaw = {
     name: 'test name',
     description: 'test description',
-    commitSHA: '7d1a6069988cdf799946ed40a1f9adeb0cb471ff',
+    commitSHA: 'bffd86aa1496df2492a775a4e67ee44941747d3d',
     githubURL: 'https://github.com/turnbasedgames/tictactoe',
   };
   const authToken = await userCred.user.getIdToken();

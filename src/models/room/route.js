@@ -11,18 +11,11 @@ const Room = require('./room');
 const RoomState = require('./roomState');
 const RoomUser = require('./roomUser');
 const { getUserCode } = require('./runner');
-const { publisher } = require('../../setupRedis');
+const { publisher, subscriber } = require('../../setupRedis');
+const logger = require('../../logger');
 
 const PATH = '/room';
 const router = express.Router();
-
-// setup redis publisher and subscriber
-// setup events for error
-
-// in an endpoint
-// on("message"), if channel is the right roomid, process message
-// on("subscribe"), if channel is the right roomid, disconnect listener
-// subscribe()
 
 router.get('/',
   celebrate({
@@ -65,7 +58,7 @@ router.post('/', auth, asyncHandler(async (req, res) => {
     await room.save({ session });
     await roomUser.save({ session });
     await roomState.save({ session });
-    await publisher.publishAsync(room.id, roomState.version);
+    await publisher.publish(room.id, roomState.version);
   });
 
   await room.populate('latestState').execPopulate();
@@ -85,22 +78,26 @@ router.post('/:id/join', celebrate({
   const roomUser = new RoomUser({ room: room.id, user: userId });
   await roomUser.validate();
 
+  let newVersion;
   await mongoose.connection.transaction(async (session) => {
     await roomUser.save({ session });
     room = await Room.findById(id).populate('latestState').session(session);
     const prevRoomState = room.latestState;
+    newVersion = prevRoomState.version + 1;
     const newRoomState = new RoomState({
       room: room.id,
       state: userCode.joinPlayer(userId, prevRoomState.state),
-      version: prevRoomState.version + 1,
+      version: newVersion,
     });
     await newRoomState.save({ session });
     room.latestState = newRoomState.id;
     room.markModified('latestState');
     await room.save({ session });
-    await publisher.publishAsync(room.id, newRoomState.version);
   });
 
+  // publishing message is not part of the transaction because subscribers can
+  // receive the message before mongodb updates the database
+  publisher.publish(room.id, newVersion);
   await room.populate('leader').populate('latestState').populate({ path: 'game', populate: { path: 'creator' } }).execPopulate();
   res.status(StatusCodes.CREATED).json({ room });
 }));
@@ -123,21 +120,25 @@ router.post('/:id/move', celebrate({
   let room = await Room.findById(id).populate('game');
   const userCode = await getUserCode(room.game);
 
+  let newVersion;
   await mongoose.connection.transaction(async (session) => {
     room = await Room.findById(id).populate('latestState').session(session);
     const prevRoomState = room.latestState;
+    newVersion = prevRoomState.version + 1;
     const newRoomState = new RoomState({
       room: room.id,
       state: userCode.playerMove(userId, move, prevRoomState.state),
-      version: prevRoomState.version + 1,
+      version: newVersion,
     });
     room.latestState = newRoomState.id;
     room.markModified('latestState');
     await newRoomState.save({ session });
     await room.save({ session });
-    await publisher.publishAsync(room.id, newRoomState.version);
   });
 
+  // publishing message is not part of the transaction because subscribers can
+  // receive the message before mongodb updates the database
+  publisher.publish(room.id, newVersion);
   res.sendStatus(StatusCodes.OK);
 }));
 
@@ -151,6 +152,47 @@ router.get('/:id',
     const room = await Room.findById(id).populate('latestState').populate('leader').populate('game')
       .populate({ path: 'game', populate: { path: 'creator' } });
     res.status(StatusCodes.OK).json({ room });
+  }));
+
+router.get('/:id/latestState',
+  celebrate({
+    [Segments.QUERY]: Joi.object().keys({
+      watch: Joi.boolean(),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { watch } = req.query;
+    if (watch) {
+      const sentInitialFunc = async () => {
+        const room = await Room.findById(id).populate('latestState').populate('leader').populate('game')
+          .populate({ path: 'game', populate: { path: 'creator' } });
+        logger.info('streaming initial latest state', { latestState: room.latestState });
+        res.write(JSON.stringify(room.latestState));
+      };
+      const sentInitialPromise = sentInitialFunc();
+      const handleMsgFunc = async (version) => {
+        try {
+          logger.info('received new version for room', { room: id, version });
+          logger.info('waiting for initial promise to complete');
+          await sentInitialPromise;
+          const roomState = await RoomState.findOne({
+            room: id,
+            version,
+          });
+          logger.info('streaming latest state', { latestState: roomState });
+          res.write(JSON.stringify(roomState));
+        } catch (err) {
+          logger.error('error when streaming version to requestor', { err: err.toString() });
+          subscriber.offChannelMessage(id.toString(), handleMsgFunc);
+          res.end();
+        }
+      };
+      await subscriber.onChannelMessage(id.toString(), handleMsgFunc);
+    } else {
+      const room = await Room.findById(id).populate('latestState');
+      res.status(StatusCodes.OK).json({ latestState: room.latestState });
+    }
   }));
 
 router.get('/:id/user',

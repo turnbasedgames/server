@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const { Schema } = mongoose;
 
-const roomStateSchema = new Schema({
+const RoomStateSchema = new Schema({
   room: {
     type: Schema.Types.ObjectId,
     required: true,
@@ -21,6 +21,14 @@ const roomStateSchema = new Schema({
   },
 }, { timestamps: true });
 
-roomStateSchema.index({ room: 1, version: 1 }, { unique: true });
+RoomStateSchema.index({ room: 1, version: 1 }, { unique: true });
+RoomStateSchema.method('toJSON', function toJSON() {
+  return {
+    id: this.id,
+    room: this.room,
+    state: this.state,
+    version: this.version,
+  };
+});
 
-module.exports = mongoose.model('RoomState', roomStateSchema);
+module.exports = mongoose.model('RoomState', RoomStateSchema);

@@ -5,6 +5,7 @@ const { Types } = require('mongoose');
 const { spawnApp, killApp } = require('../util/app');
 const { createUserCred } = require('../util/firebase');
 const { createUserAndAssert, createGameAndAssert, createRoomAndAssert } = require('../util/api_util');
+const { waitFor } = require('../util/util');
 
 async function startTicTacToeRoom(t) {
   const { api } = t.context.app;
@@ -38,13 +39,10 @@ async function startTicTacToeRoom(t) {
         null,
       ],
     ],
-    plrs: resRoom.latestState.state.plrs,
+    plrs: [userOne.id, userTwo.id],
     state: 'IN_GAME',
     winner: null,
   });
-  t.is(resRoom.latestState.state.plrs.length, 2);
-  t.true(resRoom.latestState.state.plrs.indexOf(userOne.id) !== -1);
-  t.true(resRoom.latestState.state.plrs.indexOf(userTwo.id) !== -1);
   return {
     userOne, userTwo, userCredOne, userCredTwo, game, room: resRoom,
   };
@@ -100,16 +98,9 @@ test('POST /room/:id/join joins a game', async (t) => {
 });
 
 test('POST /room/:id/move invokes creator backend to modify the game state', async (t) => {
-  const {
-    userOne, userCredOne, userCredTwo, room,
-  } = await startTicTacToeRoom(t);
+  const { userCredOne, room } = await startTicTacToeRoom(t);
   const { api } = t.context.app;
-
-  // determine who's turn it is
-  const { latestState: { state: { plrs } } } = room;
-  const plr = plrs[0];
-  const userCred = userOne.id === plr ? userCredOne : userCredTwo;
-  const authToken = await userCred.user.getIdToken();
+  const authToken = await userCredOne.user.getIdToken();
 
   // make move
   const { status } = await api.post(`/room/${room.id}/move`, { x: 0, y: 0 },
@@ -128,18 +119,11 @@ test('POST /room/:id/move invokes creator backend to modify the game state', asy
 });
 
 test('POST /room/:id/move provides error if user code throws an error', async (t) => {
-  const {
-    userOne, userCredOne, userCredTwo, room,
-  } = await startTicTacToeRoom(t);
+  const { userCredTwo, room } = await startTicTacToeRoom(t);
   const { api } = t.context.app;
 
-  // determine who's turn it is, and have wrong user make a move
-  const { latestState: { state: { plrs } } } = room;
-  const plr = plrs[0];
-  const userCred = userOne.id === plr ? userCredTwo : userCredOne;
-  const authToken = await userCred.user.getIdToken();
-
-  // make move
+  // make move with user2 (it's user1's turn!)
+  const authToken = await userCredTwo.user.getIdToken();
   const { response: { status } } = await t.throwsAsync(api.post(`/room/${room.id}/move`,
     { x: 0, y: 0 },
     { headers: { authorization: authToken } }));
@@ -172,6 +156,170 @@ test('GET /room/:id returns a room', async (t) => {
   );
   t.is(status, StatusCodes.OK);
   t.deepEqual(data.room, room);
+});
+
+test('GET /room/:id supports watch query parameter', async (t) => {
+  const { api } = t.context.app;
+  const userCredOne = await createUserCred();
+  const userCredTwo = await createUserCred();
+  const userOne = await createUserAndAssert(t, api, userCredOne);
+  const userTwo = await createUserAndAssert(t, api, userCredTwo);
+  const game = await createGameAndAssert(t, api, userCredOne, userOne);
+  const room = await createRoomAndAssert(t, api, userCredOne, game, userOne);
+  const { data } = await api.get(
+    `/room/${room.id}/latestState?watch=true`,
+    { responseType: 'stream' },
+  );
+  const waitForNextRoomState = () => waitFor(
+    async () => JSON.parse((await data.read()).toString()),
+    1000,
+    200,
+    "Didn't get room update",
+  );
+  const roomState0 = await waitForNextRoomState();
+  t.deepEqual(roomState0,
+    {
+      id: roomState0.id,
+      room: room.id,
+      version: 0,
+      state: {
+        state: 'NOT_STARTED',
+        board: [[null, null, null], [null, null, null], [null, null, null]],
+        plrs: [userOne.id],
+        winner: null,
+      },
+    });
+
+  const { data: { room: resRoom }, status } = await api.post(`/room/${room.id}/join`, {},
+    { headers: { authorization: await userCredTwo.user.getIdToken() } });
+  t.is(status, StatusCodes.CREATED);
+  t.deepEqual(resRoom, {
+    id: room.id,
+    leader: userOne,
+    game,
+    latestState: {
+      id: resRoom.latestState.id,
+      version: 1,
+      room: room.id,
+      state: {
+        board: [
+          [
+            null,
+            null,
+            null,
+          ],
+          [
+            null,
+            null,
+            null,
+          ],
+          [
+            null,
+            null,
+            null,
+          ],
+        ],
+        plrs: [userOne.id, userTwo.id],
+        state: 'IN_GAME',
+        winner: null,
+      },
+    },
+  });
+
+  const roomState1 = await waitForNextRoomState();
+  t.deepEqual(roomState1, {
+    id: roomState1.id,
+    room: room.id,
+    version: 1,
+    state: {
+      board: [
+        [
+          null,
+          null,
+          null,
+        ],
+        [
+          null,
+          null,
+          null,
+        ],
+        [
+          null,
+          null,
+          null,
+        ],
+      ],
+      plrs: [userOne.id, userTwo.id],
+      state: 'IN_GAME',
+      winner: null,
+    },
+  });
+
+  const { status: statusMove1 } = await api.post(`/room/${room.id}/move`, { x: 0, y: 0 },
+    { headers: { authorization: await userCredOne.user.getIdToken() } });
+  t.is(statusMove1, StatusCodes.OK);
+
+  const roomState2 = await waitForNextRoomState();
+  t.deepEqual(roomState2, {
+    id: roomState2.id,
+    room: room.id,
+    version: 2,
+    state: {
+      board: [
+        [
+          'X',
+          null,
+          null,
+        ],
+        [
+          null,
+          null,
+          null,
+        ],
+        [
+          null,
+          null,
+          null,
+        ],
+      ],
+      plrs: [userOne.id, userTwo.id],
+      state: 'IN_GAME',
+      winner: null,
+    },
+  });
+
+  const { status: statusMove2 } = await api.post(`/room/${room.id}/move`, { x: 0, y: 1 },
+    { headers: { authorization: await userCredTwo.user.getIdToken() } });
+  t.is(statusMove2, StatusCodes.OK);
+
+  const roomState3 = await waitForNextRoomState();
+  t.deepEqual(roomState3, {
+    id: roomState3.id,
+    room: room.id,
+    version: 3,
+    state: {
+      board: [
+        [
+          'X',
+          'O',
+          null,
+        ],
+        [
+          null,
+          null,
+          null,
+        ],
+        [
+          null,
+          null,
+          null,
+        ],
+      ],
+      plrs: [userOne.id, userTwo.id],
+      state: 'IN_GAME',
+      winner: null,
+    },
+  });
 });
 
 test('GET /room/:id/user returns a list of users', async (t) => {
