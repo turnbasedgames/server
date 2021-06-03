@@ -158,7 +158,7 @@ test('GET /room/:id returns a room', async (t) => {
   t.deepEqual(data.room, room);
 });
 
-test('GET /room/:id supports watch query parameter', async (t) => {
+test('GET /room/:id/latestState supports watch query parameter', async (t) => {
   const { api } = t.context.app;
   const userCredOne = await createUserCred();
   const userCredTwo = await createUserCred();
