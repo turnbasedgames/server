@@ -34,9 +34,11 @@ class Subscriber {
   async unsubscribe(chan) {
     if (chan in this.subscriptions) {
       if (this.subscriptions[chan] === 1) {
-        await this.subscriber.unsubscribeRaw(chan);
+        await this.unsubscribeRaw(chan);
+        delete this.subscriptions[chan];
         logger.info('unsubscribed to channel', { chan, subscriptions: this.subscriptions });
       } else {
+        this.subscriptions[chan] -= 1;
         logger.info('other subscriptions exist, no op', { chan, subscriptions: this.subscriptions });
       }
     } else {

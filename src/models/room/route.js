@@ -164,6 +164,8 @@ router.get('/:id/latestState',
     const { id } = req.params;
     const { watch } = req.query;
     if (watch) {
+      res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+      res.setHeader('Transfer-Encoding', 'chunked');
       const sentInitialFunc = async () => {
         const room = await Room.findById(id).populate('latestState').populate('leader').populate('game')
           .populate({ path: 'game', populate: { path: 'creator' } });
@@ -184,11 +186,14 @@ router.get('/:id/latestState',
           res.write(JSON.stringify(roomState));
         } catch (err) {
           logger.error('error when streaming version to requestor', { err: err.toString() });
-          subscriber.offChannelMessage(id.toString(), handleMsgFunc);
           res.end();
         }
       };
       await subscriber.onChannelMessage(id.toString(), handleMsgFunc);
+      req.on('close', () => {
+        logger.info('streaming request from client has ended, beginning cleanup');
+        subscriber.offChannelMessage(id.toString(), handleMsgFunc);
+      });
     } else {
       const room = await Room.findById(id).populate('latestState');
       res.status(StatusCodes.OK).json({ latestState: room.latestState });

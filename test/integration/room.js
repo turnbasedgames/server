@@ -1,4 +1,5 @@
 const test = require('ava');
+const { CancelToken } = require('axios');
 const { StatusCodes } = require('http-status-codes');
 const { Types } = require('mongoose');
 
@@ -166,29 +167,30 @@ test('GET /room/:id/latestState supports watch query parameter', async (t) => {
   const userTwo = await createUserAndAssert(t, api, userCredTwo);
   const game = await createGameAndAssert(t, api, userCredOne, userOne);
   const room = await createRoomAndAssert(t, api, userCredOne, game, userOne);
-  const { data } = await api.get(
-    `/room/${room.id}/latestState?watch=true`,
-    { responseType: 'stream' },
-  );
-  const waitForNextRoomState = () => waitFor(
+  const waitForWatchesState = (watches) => Promise.all(watches.map(({ data }) => waitFor(
     async () => JSON.parse((await data.read()).toString()),
     1000,
     200,
     "Didn't get room update",
-  );
-  const roomState0 = await waitForNextRoomState();
-  t.deepEqual(roomState0,
-    {
-      id: roomState0.id,
-      room: room.id,
-      version: 0,
-      state: {
-        state: 'NOT_STARTED',
-        board: [[null, null, null], [null, null, null], [null, null, null]],
-        plrs: [userOne.id],
-        winner: null,
-      },
-    });
+  )));
+  const assertNextWatchesState = async (watches, expectedState) => {
+    const watchStates = await waitForWatchesState(watches);
+    watchStates.forEach((state) => t.deepEqual(state, { id: state.id, ...expectedState }));
+  };
+  const watches = await Promise.all([...Array(10).keys()].map(() => api.get(
+    `/room/${room.id}/latestState?watch=true`,
+    { responseType: 'stream' },
+  )));
+  await assertNextWatchesState(watches, {
+    room: room.id,
+    version: 0,
+    state: {
+      state: 'NOT_STARTED',
+      board: [[null, null, null], [null, null, null], [null, null, null]],
+      plrs: [userOne.id],
+      winner: null,
+    },
+  });
 
   const { data: { room: resRoom }, status } = await api.post(`/room/${room.id}/join`, {},
     { headers: { authorization: await userCredTwo.user.getIdToken() } });
@@ -226,29 +228,11 @@ test('GET /room/:id/latestState supports watch query parameter', async (t) => {
     },
   });
 
-  const roomState1 = await waitForNextRoomState();
-  t.deepEqual(roomState1, {
-    id: roomState1.id,
+  await assertNextWatchesState(watches, {
     room: room.id,
     version: 1,
     state: {
-      board: [
-        [
-          null,
-          null,
-          null,
-        ],
-        [
-          null,
-          null,
-          null,
-        ],
-        [
-          null,
-          null,
-          null,
-        ],
-      ],
+      board: [[null, null, null], [null, null, null], [null, null, null]],
       plrs: [userOne.id, userTwo.id],
       state: 'IN_GAME',
       winner: null,
@@ -259,29 +243,11 @@ test('GET /room/:id/latestState supports watch query parameter', async (t) => {
     { headers: { authorization: await userCredOne.user.getIdToken() } });
   t.is(statusMove1, StatusCodes.OK);
 
-  const roomState2 = await waitForNextRoomState();
-  t.deepEqual(roomState2, {
-    id: roomState2.id,
+  await assertNextWatchesState(watches, {
     room: room.id,
     version: 2,
     state: {
-      board: [
-        [
-          'X',
-          null,
-          null,
-        ],
-        [
-          null,
-          null,
-          null,
-        ],
-        [
-          null,
-          null,
-          null,
-        ],
-      ],
+      board: [['X', null, null], [null, null, null], [null, null, null]],
       plrs: [userOne.id, userTwo.id],
       state: 'IN_GAME',
       winner: null,
@@ -292,34 +258,129 @@ test('GET /room/:id/latestState supports watch query parameter', async (t) => {
     { headers: { authorization: await userCredTwo.user.getIdToken() } });
   t.is(statusMove2, StatusCodes.OK);
 
-  const roomState3 = await waitForNextRoomState();
-  t.deepEqual(roomState3, {
-    id: roomState3.id,
+  await assertNextWatchesState(watches, {
     room: room.id,
     version: 3,
     state: {
-      board: [
-        [
-          'X',
-          'O',
-          null,
-        ],
-        [
-          null,
-          null,
-          null,
-        ],
-        [
-          null,
-          null,
-          null,
-        ],
-      ],
+      board: [['X', 'O', null], [null, null, null], [null, null, null]],
       plrs: [userOne.id, userTwo.id],
       state: 'IN_GAME',
       winner: null,
     },
   });
+});
+
+test('GET /room/:id/latestState client cancels watch stream without affecting other subscribers', async (t) => {
+  const { api } = t.context.app;
+  const userCredOne = await createUserCred();
+  const userCredTwo = await createUserCred();
+  const userOne = await createUserAndAssert(t, api, userCredOne);
+  const userTwo = await createUserAndAssert(t, api, userCredTwo);
+  const game = await createGameAndAssert(t, api, userCredOne, userOne);
+  const room = await createRoomAndAssert(t, api, userCredOne, game, userOne);
+  const source1 = CancelToken.source();
+  const source2 = CancelToken.source();
+  const { data: watchToCancel } = await api.get(
+    `/room/${room.id}/latestState?watch=true`,
+    { responseType: 'stream', cancelToken: source1.token },
+  );
+  const { data: watchOngoing } = await api.get(
+    `/room/${room.id}/latestState?watch=true`,
+    { responseType: 'stream', cancelToken: source2.token },
+  );
+  const waitForNextWatchState = (watch) => waitFor(
+    async () => JSON.parse((await watch.read()).toString()),
+    1000,
+    200,
+    "Didn't get room update",
+  );
+  const assertNextWatchState = async (watch, expectedState) => {
+    const state = await waitForNextWatchState(watch);
+    t.deepEqual(state, { id: state.id, ...expectedState });
+  };
+  const expectedState = {
+    room: room.id,
+    version: 0,
+    state: {
+      state: 'NOT_STARTED',
+      board: [[null, null, null], [null, null, null], [null, null, null]],
+      plrs: [userOne.id],
+      winner: null,
+    },
+  };
+  await assertNextWatchState(watchToCancel, expectedState);
+  await assertNextWatchState(watchOngoing, expectedState);
+
+  // after cancelling the chunked request, watchToCancel should not be receiving messages
+  source1.cancel();
+
+  const { data: { room: resRoom }, status } = await api.post(`/room/${room.id}/join`, {},
+    { headers: { authorization: await userCredTwo.user.getIdToken() } });
+  t.is(status, StatusCodes.CREATED);
+  t.deepEqual(resRoom, {
+    id: room.id,
+    leader: userOne,
+    game,
+    latestState: {
+      id: resRoom.latestState.id,
+      version: 1,
+      room: room.id,
+      state: {
+        board: [
+          [
+            null,
+            null,
+            null,
+          ],
+          [
+            null,
+            null,
+            null,
+          ],
+          [
+            null,
+            null,
+            null,
+          ],
+        ],
+        plrs: [userOne.id, userTwo.id],
+        state: 'IN_GAME',
+        winner: null,
+      },
+    },
+  });
+
+  await assertNextWatchState(watchOngoing, {
+    room: room.id,
+    version: 1,
+    state: {
+      board: [[null, null, null], [null, null, null], [null, null, null]],
+      plrs: [userOne.id, userTwo.id],
+      state: 'IN_GAME',
+      winner: null,
+    },
+  });
+
+  const { status: statusMove1 } = await api.post(`/room/${room.id}/move`, { x: 0, y: 0 },
+    { headers: { authorization: await userCredOne.user.getIdToken() } });
+  t.is(statusMove1, StatusCodes.OK);
+
+  await assertNextWatchState(watchOngoing, {
+    room: room.id,
+    version: 2,
+    state: {
+      board: [['X', null, null], [null, null, null], [null, null, null]],
+      plrs: [userOne.id, userTwo.id],
+      state: 'IN_GAME',
+      winner: null,
+    },
+  });
+
+  source2.cancel();
+
+  const { status: statusMove2 } = await api.post(`/room/${room.id}/move`, { x: 0, y: 1 },
+    { headers: { authorization: await userCredTwo.user.getIdToken() } });
+  t.is(statusMove2, StatusCodes.OK);
 });
 
 test('GET /room/:id/user returns a list of users', async (t) => {
