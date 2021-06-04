@@ -159,6 +159,40 @@ test('GET /room/:id returns a room', async (t) => {
   t.deepEqual(data.room, room);
 });
 
+test('GET /room/:id/latestState provides the latestStaet of a room', async (t) => {
+  const { api } = t.context.app;
+  const { userOne, userTwo, room } = await startTicTacToeRoom(t);
+  const { data: { latestState }, status } = await api.get(`/room/${room.id}/latestState`);
+  t.is(status, StatusCodes.OK);
+  t.deepEqual(latestState, {
+    id: latestState.id,
+    room: room.id,
+    state: {
+      board: [
+        [
+          null,
+          null,
+          null,
+        ],
+        [
+          null,
+          null,
+          null,
+        ],
+        [
+          null,
+          null,
+          null,
+        ],
+      ],
+      plrs: [userOne.id, userTwo.id],
+      state: 'IN_GAME',
+      winner: null,
+    },
+    version: 1,
+  });
+});
+
 test('GET /room/:id/latestState supports watch query parameter', async (t) => {
   const { api } = t.context.app;
   const userCredOne = await createUserCred();
