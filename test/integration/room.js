@@ -159,7 +159,7 @@ test('GET /room/:id returns a room', async (t) => {
   t.deepEqual(data.room, room);
 });
 
-test('GET /room/:id/latestState provides the latestStaet of a room', async (t) => {
+test('GET /room/:id/latestState provides the latestState of a room', async (t) => {
   const { api } = t.context.app;
   const { userOne, userTwo, room } = await startTicTacToeRoom(t);
   const { data: { latestState }, status } = await api.get(`/room/${room.id}/latestState`);
