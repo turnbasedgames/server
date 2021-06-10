@@ -1,5 +1,4 @@
 const test = require('ava');
-const { CancelToken } = require('axios');
 const { StatusCodes } = require('http-status-codes');
 const { Types } = require('mongoose');
 
@@ -8,7 +7,6 @@ const { createUserCred } = require('../util/firebase');
 const {
   createUserAndAssert, createGameAndAssert, createRoomAndAssert, startTicTacToeRoom,
 } = require('../util/api_util');
-const { waitFor } = require('../util/util');
 
 test.before(async (t) => {
   const app = await spawnApp();
