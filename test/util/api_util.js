@@ -1,10 +1,11 @@
 const { StatusCodes } = require('http-status-codes');
+const { v4: uuidv4 } = require('uuid');
 
 const { createUserCred } = require('./firebase');
 
 async function createGameAndAssert(t, api, userCred, user) {
   const gameRaw = {
-    name: 'test name',
+    name: `integration-tests-${uuidv4()}`,
     description: 'test description',
     commitSHA: 'bffd86aa1496df2492a775a4e67ee44941747d3d',
     githubURL: 'https://github.com/turnbasedgames/tictactoe',
