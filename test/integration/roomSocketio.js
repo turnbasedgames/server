@@ -128,3 +128,77 @@ test('sockets that emit watchRoom with a room id will get events for room:latest
     },
   });
 });
+
+test('sockets can unwatch a room to no longer receive room:latestState events when state changes', async (t) => {
+  const { api, baseURL } = t.context.app;
+  const {
+    userOne, userTwo, userCredOne, userCredTwo, game, room,
+  } = await startTicTacToeRoom(t);
+  const waitForNextEvent = (watches) => Promise.all(watches.map(({ messageHistory }) => waitFor(
+    () => {
+      if (messageHistory.length > 0) {
+        return messageHistory.shift();
+      }
+      throw Error('No messages received!');
+    },
+    1000,
+    200,
+    "Didn't get room update",
+  )));
+  const assertNextLatestState = async (sockets, expectedState) => {
+    const watchStates = await waitForNextEvent(sockets);
+    watchStates.forEach((state) => t.deepEqual(state, { id: state.id, ...expectedState }));
+  };
+  const createSocket = () => {
+    const socket = io(baseURL);
+    socket.emit('watchRoom', { roomId: room.id });
+    socket.messageHistory = [];
+    socket.on('room:latestState', (message) => socket.messageHistory.push(message));
+    return socket;
+  };
+  const socket1 = await createSocket();
+  const socket2 = await createSocket();
+
+  const { status: statusMove1 } = await api.post(`/room/${room.id}/move`, { x: 0, y: 0 },
+    { headers: { authorization: await userCredOne.user.getIdToken() } });
+  t.is(statusMove1, StatusCodes.OK);
+
+  await assertNextLatestState([socket1, socket2], {
+    room: room.id,
+    version: 2,
+    state: {
+      board: [['X', null, null], [null, null, null], [null, null, null]],
+      plrs: [userOne.id, userTwo.id],
+      state: 'IN_GAME',
+      winner: null,
+    },
+  });
+
+  socket2.emit('unwatchRoom', { roomId: room.id });
+
+  const { status: statusMove2 } = await api.post(`/room/${room.id}/move`, { x: 0, y: 1 },
+    { headers: { authorization: await userCredTwo.user.getIdToken() } });
+  t.is(statusMove2, StatusCodes.OK);
+
+  await assertNextLatestState([socket1], {
+    room: room.id,
+    version: 3,
+    state: {
+      board: [['X', 'O', null], [null, null, null], [null, null, null]],
+      plrs: [userOne.id, userTwo.id],
+      state: 'IN_GAME',
+      winner: null,
+    },
+  });
+
+  await t.throwsAsync(assertNextLatestState([socket2], {
+    room: room.id,
+    version: 3,
+    state: {
+      board: [['X', 'O', null], [null, null, null], [null, null, null]],
+      plrs: [userOne.id, userTwo.id],
+      state: 'IN_GAME',
+      winner: null,
+    },
+  }));
+});
