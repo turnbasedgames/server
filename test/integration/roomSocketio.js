@@ -132,7 +132,7 @@ test('sockets that emit watchRoom with a room id will get events for room:latest
 test('sockets can unwatch a room to no longer receive room:latestState events when state changes', async (t) => {
   const { api, baseURL } = t.context.app;
   const {
-    userOne, userTwo, userCredOne, userCredTwo, game, room,
+    userOne, userTwo, userCredOne, userCredTwo, room,
   } = await startTicTacToeRoom(t);
   const waitForNextEvent = (watches) => Promise.all(watches.map(({ messageHistory }) => waitFor(
     () => {

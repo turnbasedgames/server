@@ -11,7 +11,6 @@ const Room = require('./room');
 const RoomState = require('./roomState');
 const RoomUser = require('./roomUser');
 const { getUserCode } = require('./runner');
-const logger = require('../../logger');
 
 const PATH = '/room';
 const router = express.Router();
