@@ -8,7 +8,7 @@
     "dev": "nodemon -r dotenv/config index.js",
     "lint": "eslint --ignore-path .gitignore .",
     "test": "ava --timeout=1m --verbose",
-    "test:coverage": "nyc npm run test -- --match=\"sockets can be*\"",
+    "test:coverage": "nyc npm run test",
     "test:check-coverage": "npm run test:coverage && nyc check-coverage --lines 80 --branches 80 --statements 80 --functions 80",
     "reset": "npm run reset:db && npm run reset:firebase",
     "reset:db": "node -r dotenv/config ./bin/resetDB",
