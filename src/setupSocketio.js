@@ -1,12 +1,7 @@
-const redis = require('redis');
 const redisAdapter = require('@socket.io/redis-adapter');
 
+const { pubClient, subClient } = require('./setupRedis');
 const logger = require('./logger');
-
-const pubClient = redis.createClient({
-  url: process.env.REDIS_CONNECTION_URL,
-});
-const subClient = pubClient.duplicate();
 
 function setupSocketio(io) {
   io.adapter(redisAdapter(pubClient, subClient));
