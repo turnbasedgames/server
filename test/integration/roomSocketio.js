@@ -24,7 +24,7 @@ function waitForNextEvent({ messageHistory }) {
     }
     throw Error('No messages received!');
   },
-  1000,
+  2000,
   200,
   "Didn't get room:latestState update");
 }
